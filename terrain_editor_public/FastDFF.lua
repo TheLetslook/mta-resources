@@ -9,9 +9,6 @@ local _mathMax = math.max
 local _mathSqrt = math.sqrt
 local _mathFloor = math.floor
 
-GEN_LIMIT = 500 -- Лимит операций за промежуток времени в потоке
-SECTOR_RELATIVE = false -- Не изменять! В публичной версии не работает.
-
 --[[
 	FastDFFBuilder
 ]]
@@ -76,7 +73,9 @@ function FastDFFBuilder.writeMap ( sector )
 	local passedOps = 0
 	local limitOps = 0
 	
-	local halfElevation = MAP_MAX_ELEVATION / 2
+	local halfElevation = ELEVATION_CORRECT and ( math.floor ( 299 * Heightfield.vertScale ) / 2 ) or 0
+	local relX = WORLD_SIZE_X * MAP_SIZE
+	local relY = WORLD_SIZE_X * MAP_SIZE
 	
 	for i = 0, MAP_SIZE do
 		for j = 0, MAP_SIZE do
@@ -85,7 +84,7 @@ function FastDFFBuilder.writeMap ( sector )
 			_fileSetPos ( file, DFF_VERTICES + (index*12) + 8 ) -- Inverted
 			
 			local level = _getLevel ( pixelX + j, pixelY + i )
-			local height = Heightfield.vertScale * level - HALF_ELEVATION
+			local height = Heightfield.vertScale * level - halfElevation
 			
 			_dataToBytes ( file, "f", height --[[(level * MAP_SPACING_Z) - halfElevation]] )
 			
@@ -216,7 +215,7 @@ function FastCOLBuilder.writeMap ( sector )
 	local passedOps = 0
 	local limitOps = 0
 
-	local halfElevation = MAP_MAX_ELEVATION / 2
+	local halfElevation = ELEVATION_CORRECT and ( math.floor ( 299 * Heightfield.vertScale ) / 2 ) or 0
 	
 	for i = 0, MAP_SIZE do
 		for j = 0, MAP_SIZE do
@@ -226,7 +225,7 @@ function FastCOLBuilder.writeMap ( sector )
 			
 			local level = _getLevel ( pixelX + j, pixelY + i )
 			--local zpos = (level * MAP_SPACING_Z) - halfElevation
-			local zpos = Heightfield.vertScale * level - HALF_ELEVATION
+			local zpos = Heightfield.vertScale * level - halfElevation
 
 			_dataToBytes ( file, "s", 128 * zpos )
 			
@@ -247,7 +246,7 @@ function FastCOLBuilder.writeMap ( sector )
 	end
 	
 	if minz < -299.9 or maxz > 299.9 then
-		outputDebugString ( "Модель имеет недопустимую высоту!(" .. minz .. ", " .. maxz .. "," .. level .. ")", 2 )
+		outputDebugString ( "Модель имеет недопустимую высоту!(" .. minz .. ", " .. maxz .. ")", 2 )
 	end
 
 	-- Обновляем minz

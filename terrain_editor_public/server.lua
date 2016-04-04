@@ -5,6 +5,9 @@ local _mathMax = math.max
 local _mathClamp = function ( min, value, max )
 	return _mathMax ( _mathMin ( value, max ), min )
 end
+local _mathLog2 = function ( x )
+	return math.log ( x ) / math.log ( 2 )
+end
 local _dist2d = getDistanceBetweenPoints2D
 
 BrushModes = {
@@ -63,6 +66,8 @@ function xrEngine.onWorldLoaded ( )
 	)
 	
 	setTimer ( xrEngine.onUpdate, 100, 0 )
+	
+	xrEngine.setupWater ( Heightfield.vertOffset )
 end
 
 function xrEngine.getPlayerLODLevel ( player )
@@ -80,6 +85,23 @@ end
 
 function xrEngine.onUpdate ( )
 	xrStreamerWorld.onUpdatePulse ( )
+end
+
+function xrEngine.setupWater ( height )
+	-- Setting water properties.
+	local SizeVal = 2998
+	-- Defining variables.
+	local southWest_X = -SizeVal
+	local southWest_Y = -SizeVal
+	local southEast_X = SizeVal
+	local southEast_Y = -SizeVal
+	local northWest_X = -SizeVal
+	local northWest_Y = SizeVal
+	local northEast_X = SizeVal
+	local northEast_Y = SizeVal
+	 
+	local water = createWater ( southWest_X, southWest_Y, height, southEast_X, southEast_Y, height, northWest_X, northWest_Y, height, northEast_X, northEast_Y, height )
+	setWaterLevel ( height )
 end
 
 --[[
@@ -201,6 +223,18 @@ function Heightfield.loadFromBinary ( fileName, callback, ... )
 		return
 	end
 	
+	local expectedResX = WORLD_SIZE_X * MAP_SIZE
+	local expectedResY = WORLD_SIZE_Y * MAP_SIZE
+	if headerData.mapWidth < expectedResX or headerData.mapHeight < expectedResY then
+		outputDebugString ( "Invalid map resolution. Please, rebuild heightfield with " .. 2 ^ math.ceil ( _mathLog2 ( expectedResX ) ) .. "x" .. 2 ^ math.ceil ( _mathLog2 ( expectedResY ) ) .. " resolution.", 2 )
+		return
+	end
+	
+	if headerData.horScale ~= HOR_SCALE then
+		outputDebugString ( "Invalid horizontal scale. Please, rebuild heightfield with " .. HOR_SCALE .. " horizontal scale.", 2 )
+		return
+	end
+	
 	fileSetPos ( hfFile, headerData.dataOffset )
 	
 	outputDebugString ( "Starting of raw data parsing (" .. pixelsTotal .. " pixels)" )
@@ -306,7 +340,11 @@ function Heightfield.setLevel ( x, y, level, withoutSave )
 	
 	if withoutSave ~= true then
 		fileSetPos ( Heightfield.raw, Heightfield.rawStart + index*2 )
-		dataToBytes ( Heightfield.raw, "s", 128 * level )
+		if COMPACT_XTD then
+			dataToBytes ( Heightfield.raw, "s", 128 * level )
+		else
+			dataToBytes ( Heightfield.raw, "f", level )
+		end
 	
 		if isTimer ( Heightfield.timer ) then
 			resetTimer ( Heightfield.timer )
@@ -741,7 +779,7 @@ function placeTrees ( x, y, xml )
 	local randNum = math.random ( 1, 100 )
 	
 	for i = 1, randNum do
-		local rx, ry = getPointFromDistanceRotation ( x, y, math.random ( 0, HALF_SECTOR_SIZE - MAP_STEP ), math.random ( 0, 360 ) )
+		local rx, ry = getPointFromDistanceRotation ( x, y, math.random ( 0, HALF_SECTOR_SIZE - HOR_SCALE ), math.random ( 0, 360 ) )
 		local randName = treeModels [ math.random ( 1, #treeModels ) ]
 		local rz = getTerrainHeight ( rx, ry )
 		if rz > 0 then

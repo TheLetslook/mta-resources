@@ -13,8 +13,6 @@ end
 
 local _dist2d = getDistanceBetweenPoints2D
 
-GEN_TIME = 3
-SMOOTH_ITERS = 1
 
 local function getRawHeight ( x, y )
 	local resX = Heightfield.resolutionX
@@ -26,7 +24,7 @@ local function getRawHeight ( x, y )
 	return height
 end
 local function getWorldHeight ( height )
-	return PATCH_Z + Heightfield.vertScale * height - HALF_ELEVATION
+	return PATCH_Z + height * Heightfield.vertScale
 end
 local function brushCircleFunc ( x, y, strength, size, mode )
 	local updateSectors = { }
@@ -150,14 +148,13 @@ xrEngine = {
 
 -- Список масок для каналов и их комбинаций
 xrShaderMaskChannel = {
-	{ channel = "r", file = "textures/detail_grnd_grass.dds", value = "Tex1" },
-	{ channel = "g", file = "textures/detail_grnd_asphalt.dds", value = "Tex2" },
-	{ channel = "b", file = "textures/detail_grnd_earth.dds", value = "Tex3" },
-	{ channel = "a", file = "textures/detail_grnd_yantar.dds", value = "Tex4" },
-	{ channel = "rg", file = "textures/detail_grnd_sand.dds", value = "Tex5" },
-	{ channel = "gb", file = "textures/detail_grnd_leaves.dds", value = "Tex6" },
+	{ channel = "r", file = "textures/rock3.jpg", value = "Tex1" },
+	{ channel = "g", file = "textures/riverdalegrassdead.jpg", value = "Tex2" },
+	{ channel = "b", file = "textures/redsand1a.jpg", value = "Tex3" },
+	{ channel = "a", file = "textures/riverdalegrass.jpg", value = "Tex4" },
+	--[[{ channel = "gb", file = "textures/detail_grnd_leaves.dds", value = "Tex6" },
 	{ channel = "rb", file = "textures/detail_grnd_cracked.dds", value = "Tex7" },
-	{ channel = "ba", file = "textures/detail_grnd_plates.dds", value = "Tex8" },
+	{ channel = "ba", file = "textures/detail_grnd_plates.dds", value = "Tex8" },]]
 }
 
 function xrEngine.init ( )
@@ -178,12 +175,14 @@ function xrEngine.init ( )
 	--xrEngine.attrs = dxCreateTexture ( "textures/attributes.png" )
 	xrEngine.baseTex = dxCreateTexture ( "worlds/heightmap.dds" )
 	xrEngine.lmapTex = dxCreateTexture ( "worlds/heightmap_lmap.dds" )
-	xrEngine.grassText = dxCreateTexture ( "worlds/heightmap_grass.png" )
+	xrEngine.normalTex = dxCreateTexture ( "worlds/heightmap_normal.dds" )
+	xrEngine.maskTex = dxCreateTexture ( "worlds/heightmap_mask.png" )
 	
 	xrEngine.shader = dxCreateShader ( "shader.fx" )
 	dxSetShaderValue ( xrEngine.shader, "TexBase", xrEngine.baseTex )
 	dxSetShaderValue ( xrEngine.shader, "TexLMap", xrEngine.lmapTex )
-	dxSetShaderValue ( xrEngine.shader, "TexDet", xrEngine.grassText )
+	dxSetShaderValue ( xrEngine.shader, "TexNormal", xrEngine.normalTex )
+	dxSetShaderValue ( xrEngine.shader, "TexDet", xrEngine.maskTex )
 	
 	-- Создаем текстуры для блендинга ландшафта
 	xrEngine.maskTextures = { }
@@ -215,8 +214,8 @@ end
 
 
 function xrEngine.getMapFromWorldPosition ( x, y )
-	local _x = _mathFloor ( x / MAP_STEP ) * MAP_STEP
-	local _y = _mathFloor ( y / MAP_STEP ) * MAP_STEP
+	local _x = _mathFloor ( x / HOR_SCALE ) * HOR_SCALE
+	local _y = _mathFloor ( y / HOR_SCALE ) * HOR_SCALE
 	local worldSizeX = SECTOR_SIZE * WORLD_SIZE_X
 	local worldSizeY = SECTOR_SIZE * WORLD_SIZE_Y
 	local deltaX = ( _x - xrStreamerWorld.worldX ) / worldSizeX
@@ -292,9 +291,9 @@ function xrEngine.onRender ( )
 	local hemir, hemig, hemib, hemia = exports.xrskybox:getEnvValue ( ENV_HEMI )
 	local sunr, sung, sunb = exports.xrskybox:getEnvValue ( ENV_SUNCOLOR )
 		
-	dxSetShaderValue ( xrEngine.shader, "L_ambient", ambr, ambg, ambb, 1 )
-	dxSetShaderValue ( xrEngine.shader, "L_hemi_color", hemir, hemig, hemib, 1 )
-	dxSetShaderValue ( xrEngine.shader, "L_sun_color", sunr, sung, sunb )
+	--dxSetShaderValue ( xrEngine.shader, "L_ambient", ambr, ambg, ambb, 1 )
+	--dxSetShaderValue ( xrEngine.shader, "L_hemi_color", hemir, hemig, hemib, 1 )
+	--dxSetShaderValue ( xrEngine.shader, "L_sun_color", sunr, sung, sunb )
 
 	
 	-- Если режим редактирования в данный момент не активирован, выходим из функции
@@ -316,8 +315,8 @@ function xrEngine.onRender ( )
 			local h = Heightfield.getHeight ( x, y )
 			h = getWorldHeight ( h )
 			
-			local xx = xrStreamerWorld.worldX + mxx * 3
-			local yy = xrStreamerWorld.worldY - myy * 3
+			local xx = xrStreamerWorld.worldX + mxx * HOR_SCALE
+			local yy = xrStreamerWorld.worldY - myy * HOR_SCALE
 			
 			dxDrawLine3D ( xx, yy, h, xx + normal.x, yy + normal.y, h + normal.z, tocolor ( 255, 0, 0 ), 2 )
 	
@@ -328,7 +327,7 @@ function xrEngine.onRender ( )
 			end
 	
 			-- Рисуем сетку контрольных точек (снизу вверх)
-			local halfMapStep = MAP_STEP/2
+			local halfMapStep = HOR_SCALE/2
 			local resolutionX = Heightfield.resolutionX
 			for i, vec in ipairs ( xrEngine.snapGrid ) do
 				-- Рисуем точку
@@ -403,12 +402,12 @@ function xrEngine.onCursorMove ( _, _, cx, cy )
 		local camLookVec = Vector3 ( x, y, z )
 		local pointIndex
 	
-		local bias = MAP_STEP * xrEngine.snapStep
+		local bias = HOR_SCALE * xrEngine.snapStep
 		local snapX, snapY = _mathFloor ( x / bias ) * bias, _mathFloor ( y / bias ) * bias
 		local halfGridSize = xrEngine.gridSize / 2
 		local leftX = snapX - bias*halfGridSize
 		local bottomY = snapY - bias*halfGridSize
-		local halfMapStep = MAP_STEP/2
+		local halfMapStep = HOR_SCALE/2
 		local isEmpty = #xrEngine.snapGrid == 0
 	
 		local gridSide = xrEngine.gridSize - 1
@@ -450,7 +449,7 @@ function xrEngine.onCursorMove ( _, _, cx, cy )
 		--[[if pointIndex then
 			xrEngine.cursorPoint = poi
 		
-			local mapVec = xrEngine.getMapFromWorldPosition ( Vector2 ( xrEngine.snapGrid [ pointIndex ] + MAP_STEP/2 )
+			local mapVec = xrEngine.getMapFromWorldPosition ( Vector2 ( xrEngine.snapGrid [ pointIndex ] + HOR_SCALE/2 )
 
 			local resolutionX = Heightfield.resolutionX
 			xrEngine.cursorPoint = mapVec.y * resolutionX + mapVec.x
@@ -468,7 +467,7 @@ function xrEngine.onBrushApply ( button, keyState )
 		if xrEngine.cursorPoint and keyState ~= "down" then
 			-- Выделяем или скрываем контрольную точку
 			local vec = xrEngine.snapGrid [ xrEngine.cursorPoint ]
-			local mx, my = xrEngine.getMapFromWorldPosition ( vec.x + MAP_STEP/2, vec.y + MAP_STEP/2 )
+			local mx, my = xrEngine.getMapFromWorldPosition ( vec.x + HOR_SCALE/2, vec.y + HOR_SCALE/2 )
 			local resolutionX = Heightfield.resolutionX
 			local index = my * resolutionX + mx + 1
 			
@@ -500,8 +499,8 @@ function xrEngine.onBrushApply ( button, keyState )
 		
 	local sector = xrStreamerWorld.findSector ( x, y )
 	if sector then
-		local _x = math.floor ( ( x + 1.5 ) / MAP_STEP ) * MAP_STEP
-		local _y = math.floor ( ( y + 1.5 ) / MAP_STEP ) * MAP_STEP
+		local _x = math.floor ( ( x + 1.5 ) / HOR_SCALE ) * HOR_SCALE
+		local _y = math.floor ( ( y + 1.5 ) / HOR_SCALE ) * HOR_SCALE
 		local worldSizeX = SECTOR_SIZE * WORLD_SIZE_X
 		local worldSizeY = SECTOR_SIZE * WORLD_SIZE_Y
 		local deltaX = ( _x - xrStreamerWorld.worldX ) / worldSizeX
@@ -1026,7 +1025,7 @@ addEventHandler ( "onClientResourceStart", resourceRoot,
 
 -- EXPORT
 function getTerrainHeight ( x, y )
-	local level = PATCH_Z + Heightfield.getHeight ( x, y )*Heightfield.vertScale - HALF_ELEVATION
+	local level = PATCH_Z + Heightfield.getHeight ( x, y )*Heightfield.vertScale
 	
 	return level
 end
