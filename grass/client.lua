@@ -87,32 +87,6 @@ addEventHandler ( "onClientResourceStart", resourceRoot,
 		xrGrass.swingCurrent = xrSwingValue.new ( )
 		
 		xrStreamerWorld.init ( )
-		
-		
-		local channelsUsed = 3 -- Количество каналов для разбора уровня. Максимум 4.
-		local metersPerChannel = 200 -- Метров на один цветовой канал
-		local absEval = ( metersPerChannel * channelsUsed ) / 2
-		local metersPerColor = ( 1 / 255 ) * metersPerChannel
-	
-		local level = 123
-
-			
-		-- Строим относительно абсолютной отметки(-absEval) подьем травы
-		level = level + absEval + 0.001
-		
-		-- Разбираем уровень на цвета с учетом metersPerChannel метров на канал
-		local colorsNeeded = math.min ( math.ceil ( level / metersPerChannel ), channelsUsed )
-		
-		local colors = { 0, 0, 0, 0 }
-		for i = 1, colorsNeeded do
-			local color = math.floor ( level / metersPerColor )
-			colors [ i ] = math.min ( color, 255 )
-			level = level - metersPerChannel
-		end
-		
-		outputChatBox ( colors [ 1 ] .. ", " .. colors [ 2 ] .. ", " .. colors [ 3 ] .. "," .. colors [ 4 ] )
-		local result = ( colors [ 1 ] / 255 ) * metersPerChannel + ( colors [ 2 ] / 255 ) * metersPerChannel + ( colors [ 3 ] / 255 ) * metersPerChannel - absEval
-		outputChatBox(result)
 	end
 , false )
 
