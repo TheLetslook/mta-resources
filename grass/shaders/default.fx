@@ -3,6 +3,9 @@ float3 vecColor;
 float4 		wave; 	// cx,cy,cz,tm
 float4 		dir2D; 
 float fConst = 1;//1.0f/16384.0f;
+float mtrsPerCnl;
+float halfEval;
+
 
 //---------------------------------------------------------------------
 // Include some common stuff
@@ -71,8 +74,9 @@ PSInput VertexShaderFunction(VSInput VS)
     float4 pos = float4(VS.Position, 1);
 
     float3 level = tex2Dlod(SamplerLevel, float4(VS.TexCoord2.xy, 1, 1));
-    float base = 50.0f + 0.17f + level.r*100.0f;
-    pos.z = pos.z + base;
+    // Unpack color channels evaluation
+    float base = level.r*mtrsPerCnl + level.g*mtrsPerCnl + level.b*mtrsPerCnl - halfEval;
+    pos.z = pos.z + base + 0.5f;
     
 	float 	dp	= calc_cyclic   (dot(pos,wave));
 	float 	H 	= pos.z - base;			// height of vertex (scaled)

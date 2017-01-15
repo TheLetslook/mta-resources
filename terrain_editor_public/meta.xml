@@ -24,11 +24,18 @@
     <file src="textures/detail_grnd_leaves.dds" />
     <file src="textures/detail_grnd_cracked.dds" />
     <file src="textures/detail_grnd_plates.dds" />
-    <file src="textures/terrain_jupiter_mask.dds" />
+    
+    <file src="textures/rock3.jpg" />
+    <file src="textures/riverdalegrassdead.jpg" />
+    <file src="textures/redsand1a.jpg" />
+    <file src="textures/riverdalegrass.jpg" />
+    <file src="textures/yellowsand1.jpg" />
     
     <file src="worlds/heightmap.dds" />
     <file src="worlds/heightmap_lmap.dds" />
-    <file src="worlds/heightmap_grass.png" />
+    <file src="worlds/heightmap_normal.dds" />
+    <file src="worlds/heightmap_mask.dds" />
+    <file src="worlds/heightmap_mask.png" />
     
     <file src="images/raiseHeight_d.png" />
     <file src="images/raiseHeight_h.png" />

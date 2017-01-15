@@ -376,3 +376,7 @@ end
 function Heightfield.set ( tbl )
 	heightData = tbl
 end
+
+function Heightfield.getMaxElevation ( )
+	return math.floor ( 299 * Heightfield.vertScale )
+end

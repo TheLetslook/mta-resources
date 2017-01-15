@@ -7,14 +7,18 @@
 -- DO NOT CHANGE!
 SECTOR_SIZE = 60
 HALF_SECTOR_SIZE = SECTOR_SIZE / 2
-WORLD_WIDTH = 9000
-WORLD_HEIGHT = 9000
+WORLD_WIDTH = 6000
+WORLD_HEIGHT = 6000
 WORLD_SIZE_X = WORLD_WIDTH / SECTOR_SIZE
 WORLD_SIZE_Y = WORLD_HEIGHT / SECTOR_SIZE
 
+GRASS_MODEL = 3500
 GRASS_PATCHES = 6
 
 LOD_LEVEL = 1
+
+CHANNELS_NUM = 3 -- Количество каналов для разбора уровня. Максимум 4.
+METERS_PER_CHANNEL = 200 -- Метров на один цветовой канал
 
 local _mathFloor = math.floor
 
@@ -222,16 +226,20 @@ end
 function xrStreamerSector:streamIn ( )
 	outputDebugString ( "grass in")
 
+	local absEval = ( METERS_PER_CHANNEL * CHANNELS_NUM ) / 2
+	
 	for i = 1, GRASS_PATCHES do
 		local patch = {
-			object = createObject ( 3000, self.x + 30 + math.random ( -3, 3 ), self.y - 30 + math.random ( -3, 3 ), 0, 0, 0, math.random ( -45, 45 ) ),
-			rt = dxCreateRenderTarget ( 32, 32, false ),
+			object = createObject ( GRASS_MODEL, self.x + 30 + math.random ( -3, 3 ), self.y - 30 + math.random ( -3, 3 ), 0, 0, 0, math.random ( -45, 45 ) ),
+			rt = dxCreateRenderTarget ( 32, 32, true ),
 			shader = dxCreateShader ( "shaders/default.fx" ),
 			biasx = biasx,
 			biasy = biasy
 		}
 		
 		dxSetShaderValue ( patch.shader, "gLevelTex", patch.rt )
+		dxSetShaderValue ( patch.shader, "mtrsPerCnl", METERS_PER_CHANNEL )
+		dxSetShaderValue ( patch.shader, "halfEval", absEval )
 		engineApplyShaderToWorldTexture ( patch.shader, "*", patch.object )
 		
 		self.elements [ i ] = patch
@@ -261,23 +269,47 @@ function getPositionFromElementOffset(element,offX,offY,offZ)
     return x, y, z                               -- Return the transformed point
 end
 
+--[[
+	Техника очень проста. Она заключается в разборе высоты на цветовые каналы. 
+	Важно учитывать, что МТА умеет передавать цвета только как целые числа. 
+	Поэтому техника закладывает определенную степень точности metersPerColor, что определяет сколько на одно целое число будет полагаться метров подьема.
+	Далее в шейдере из цветовых каналов собирается уровень подьема и применяется, но уже с учетом степени точности.
+	
+	TEDERIs
+]]
+
 function xrStreamerSector:updateRT ( )
 	if self.activated ~= true then
 		return
 	end
 	
+	local absEval = ( METERS_PER_CHANNEL * CHANNELS_NUM ) / 2
+	local metersPerColor = ( 1 / 255 ) * METERS_PER_CHANNEL
+	
 	local patch = self.elements [ self.patchIndex ]
 	dxSetRenderTarget ( patch.rt )
 	for _, element in ipairs ( xrElements ) do
 		local rx, ry = getPositionFromElementOffset(patch.object, element.x, element.y, 0)
-		local hz = exports.terrain_editor:getTerrainHeight ( rx, ry )
+		local hz = exports.terrain_editor_public:getTerrainHeight ( rx, ry )
 		
 		local level = 0
 		if hz then
-			level = (hz-50) / 100
+			level = math.max ( math.min ( hz, absEval ), -absEval )
+		end
+			
+		-- Строим относительно абсолютной отметки(-absEval) подьем травы
+		level = level + absEval + 0.001
+		
+		-- Разбираем уровень на цвета с учетом METERS_PER_CHANNEL метров на канал
+		local colorsNeeded = math.min ( math.ceil ( level / METERS_PER_CHANNEL ), CHANNELS_NUM )
+		local colors = { 0, 0, 0, 0 }
+		for i = 1, colorsNeeded do
+			local color = math.floor ( level / metersPerColor )
+			colors [ i ] = math.min ( color, 255 )
+			level = level - METERS_PER_CHANNEL
 		end
 		
-		dxDrawRectangle ( element.tx, element.ty, 1, 1, tocolor ( math.floor ( level * 255 ), 255, 255, 255 ) )
+		dxDrawRectangle ( element.tx, element.ty, 1, 1, tocolor ( colors [ 1 ], colors [ 2 ], colors [ 3 ], 255 ) )
 	end
 	dxSetRenderTarget ( )
 	

@@ -52,9 +52,9 @@ addEventHandler ( "onClientResourceStart", resourceRoot,
 		local col = engineLoadCOL ( "models/grass.col" )
 		local dff = engineLoadDFF ( "models/grass.dff", 0 )
 		
-		engineImportTXD ( txd, 3000 )
-		engineReplaceCOL ( col, 3000 )
-		engineReplaceModel ( dff, 3000, true )
+		engineImportTXD ( txd, GRASS_MODEL )
+		engineReplaceCOL ( col, GRASS_MODEL )
+		engineReplaceModel ( dff, GRASS_MODEL, true )
 		
 		local xml = xmlLoadFile ( "grass.xml" )
 		for i, node in ipairs ( xmlNodeGetChildren ( xml ) ) do

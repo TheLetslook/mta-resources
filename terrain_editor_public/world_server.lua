@@ -1,21 +1,18 @@
 SECTOR_SIZE = 150
-HALF_SECTOR_SIZE = SECTOR_SIZE / 2
+HALF_SECTOR_SIZE = SECTOR_SIZE / 2 --75 now
 WORLD_WIDTH = 6000
 WORLD_HEIGHT = 6000
-WORLD_SIZE_X = WORLD_WIDTH / SECTOR_SIZE --45 now
-WORLD_SIZE_Y = WORLD_HEIGHT / SECTOR_SIZE --60 now
--- 2700 всего
-
--- 2048 = 8 секторов
-
-MAP_STEP = 3
-MAP_SIZE = SECTOR_SIZE / MAP_STEP --50 now
+WORLD_SIZE_X = WORLD_WIDTH / SECTOR_SIZE --40 now
+WORLD_SIZE_Y = WORLD_HEIGHT / SECTOR_SIZE --40 now
+HOR_SCALE = 3
+MAP_SIZE = SECTOR_SIZE / HOR_SCALE --50 now
 
 SMOOTH_TERRAIN = false
+COMPACT_XTD = false -- Если true - паковать высоту в short. Если false - хранить во float
 
 LOD_LEVEL = 2
 
-PATCH_Z = 100
+PATCH_Z = 0
 
 MAP_SPACING_Z = 1
 MAP_MAX_ELEVATION = math.floor ( 299 * MAP_SPACING_Z )
@@ -80,7 +77,9 @@ end
 ]]
 xrStreamerWorld = { 
 	sectors = { },
-	senders = { }
+	senders = { },
+	
+	hffMD5 = nil
 }
 
 function xrStreamerWorld.init ( )
@@ -128,22 +127,40 @@ function xrStreamerWorld.init ( )
 		end
 	end
 	
+	-- Вычисляем хэш-сумму для исходного файла высоты
+	if fileExists ( "worlds/heightmap.hff" ) then
+		local hmFile = fileOpen ( "worlds/heightmap.hff", true )
+		local hmContent = fileRead ( hmFile, fileGetSize ( hmFile ) )
+		xrStreamerWorld.hffMD5 = md5 ( hmContent )
+		fileClose ( hmFile )
+	else
+		outputDebugString ( "Не был найден исходный файл ландшафта", 2 )
+		return
+	end
+	
 	-- Если файл секторов существует, загружаем данные из него
 	if fileExists ( "worlds/patches.xtd" ) then
-		outputChatBox ( "Идет загрузка ландшафта... Это может занять некоторое время.", root, 0, 200, 0 )
+		local file = fileOpen ( "worlds/patches.xtd", false )
+		if xrStreamerWorld.preLoadPatches ( file ) then
+			outputChatBox ( "Идет загрузка ландшафта... Это может занять некоторое время.", root, 0, 200, 0 )
 	
-		xrStreamerWorld.worldRaw = fileOpen ( "worlds/patches.xtd", false )
-		g_ProcessCr = coroutine.create ( xrStreamerWorld.loadPatches )
-		local ok, err = coroutine.resume ( g_ProcessCr, xrStreamerWorld.worldRaw )
-		if err == false then
-			outputDebugString ( "При загрузке произошла критическая ошибка" )
+			g_ProcessCr = coroutine.create ( xrStreamerWorld.loadPatches )
+			local ok, err = coroutine.resume ( g_ProcessCr, file )
+			if err == false then
+				outputDebugString ( "При загрузке произошла критическая ошибка" )
+			end
+			
+			xrStreamerWorld.worldRaw = file
+			
+			return true
 		end
-	-- В противном случае пытаемся создать файл секторов
-	else
-		outputChatBox ( "Идет создание ландшафта... Это может занять некоторое время.", root, 0, 200, 0 )
-	
-		xrStreamerWorld.processPatches ( 1 )
+		
+		fileClose ( file )
 	end
+
+	-- Иначе создаем файл секторов из исходного
+	outputChatBox ( "Идет создание ландшафта... Это может занять некоторое время.", root, 0, 200, 0 )
+	xrStreamerWorld.processPatches ( 1 )
 end
 
 function xrStreamerWorld.stop ( )
@@ -228,9 +245,13 @@ function xrStreamerWorld.fillPatches ( file )
 	end
 	local map = Heightfield.get ( )
 	
+	fileWrite ( file, xrStreamerWorld.hffMD5 )
+	
 	-- Resolution
 	dataToBytes ( file, "ui", resolutionX )
 	dataToBytes ( file, "ui", resolutionY )
+	
+	dataToBytes ( file, "ui", COMPACT_XTD == true and 1 or 0 )
 	
 	-- And some
 	dataToBytes ( file, "f", Heightfield.vertScale )
@@ -243,7 +264,11 @@ function xrStreamerWorld.fillPatches ( file )
 	for i = 1, pixelsTotal do
 		-- Запаковываем высоту и записываем ее в файл
 		local level = map [ i ]
-		dataToBytes ( file, "s", 128 * level )
+		if COMPACT_XTD then
+			dataToBytes ( file, "s", 128 * level )
+		else
+			dataToBytes ( file, "f", level )
+		end
 
 		opsNum = opsNum + 1
 		opsLimit = opsLimit + 1
@@ -279,6 +304,11 @@ function xrStreamerWorld.fillPatches ( file )
 	outputDebugString ( "Подготовка секторов завершена. Система готова к работе.", 3 )
 end
 
+function xrStreamerWorld.preLoadPatches ( file )
+	local lastMD5 = fileRead ( file, 32 )
+	return xrStreamerWorld.hffMD5 == lastMD5
+end
+
 function xrStreamerWorld.loadPatches ( file )
 	local resX = bytesToData ( "ui", fileRead ( file, 4 ) )
 	local resY = bytesToData ( "ui", fileRead ( file, 4 ) )
@@ -290,7 +320,14 @@ function xrStreamerWorld.loadPatches ( file )
 	local pixelsTotal = resX*resY
 	local patchesTotal = WORLD_SIZE_X * WORLD_SIZE_Y
 	
-	local expectedSize = 20 + (pixelsTotal*2) + 4 + (patchesTotal*4)
+	local isCompact = bytesToData ( "ui", fileRead ( file, 4 ) ) == 1
+	if isCompact ~= COMPACT_XTD then
+		outputDebugString ( "Файл секторов не может быть загружен. Тип пикселя не соответствует ожидаемому.", 2 )
+		coroutine.yield ( false )
+	end
+	
+	local pixelSize = COMPACT_XTD == true and 2 or 4
+	local expectedSize = 24 + 32 + (pixelsTotal*pixelSize) + 4 + (patchesTotal*4)
 	if expectedSize ~= fileGetSize ( file ) then
 		outputDebugString ( "Файл секторов не может быть загружен. Размер файла не соответствует ожидаемому.", 2 )
 		coroutine.yield ( false )
@@ -326,17 +363,21 @@ function xrStreamerWorld.loadPatches ( file )
 	local tempMap = { }
 	
 	for i = 1, pixelsTotal do
-		local level = bytesToData (
-			"s",
-			fileRead ( file, 2 )
-		)
+		if COMPACT_XTD then
+			local level = bytesToData (
+				"s",
+				fileRead ( file, 2 )
+			)
+			-- Распаковываем высоту
+			tempMap [ i ] = level / 128
+		else
+			local level = bytesToData (
+				"f",
+				fileRead ( file, 4 )
+			)
 		
-		if not tonumber ( level ) then
-			outputDebugString ( "При чтении высоты возникла ошибка.", 2 )
+			tempMap [ i ] = level
 		end
-		
-		-- Распаковываем высоту
-		tempMap [ i ] = level / 128
 		
 		opsNum = opsNum + 1
 		opsLimit = opsLimit + 1

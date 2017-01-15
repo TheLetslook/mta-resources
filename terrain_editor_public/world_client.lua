@@ -8,15 +8,23 @@ WORLD_SIZE_X = WORLD_WIDTH / SECTOR_SIZE -- 45
 WORLD_SIZE_Y = WORLD_HEIGHT / SECTOR_SIZE -- 60
 
 HALF_SECTOR_SIZE = SECTOR_SIZE / 2
-MAP_STEP = 3
-MAP_SIZE = SECTOR_SIZE / MAP_STEP --50 now
+HOR_SCALE = 3
+MAP_SIZE = SECTOR_SIZE / HOR_SCALE --50 now
 MAP_SPACING_Z = 1
 BUILD_PATCHES = true
 MAP_MAX_ELEVATION = math.floor ( 299 * MAP_SPACING_Z )
 HALF_ELEVATION = MAP_MAX_ELEVATION / 2
-PATCH_Z = 100
+PATCH_Z = 0
 THREADED = true
 TREES_ENABLED = false
+
+GEN_LIMIT = 500 -- Лимит операций за промежуток времени в потоке
+SECTOR_RELATIVE = false -- Не изменять! В публичной версии не работает.
+ELEVATION_CORRECT = false -- Не изменять! Влияет на среднюю точку карты высоты
+
+
+GEN_TIME = 3
+SMOOTH_ITERS = 1
 
 -- Выгрузка шейдеров
 SHADER_UNLOAD_ENABLED = true
